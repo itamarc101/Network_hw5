@@ -56,7 +56,7 @@ void packet_spoof(struct ipheader *ip_packet)
     // information about dest
     dest.sin_family = AF_INET;
     dest.sin_addr = ip_packet->dest_ip;
-    dest.sin_port=0;
+    dest.sin_port = 0;
 
     // sends packet
     int send = sendto(sock, ip_packet, ntohs(ip_packet->ip_len), 0, (struct sockaddr *)&dest, sizeof(dest));
@@ -104,29 +104,29 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
     struct ethheader *ether_packet = (struct ethheader *)packet;
     struct ipheader *ip_packet;
     ip_packet = (struct ipheader *)(packet + sizeof(struct ethheader));
-    struct icmpheader *icmp_packet = (struct icmpheader *)(packet + sizeof(struct ethheader)+sizeof(struct ipheader));
+    struct icmpheader *icmp_packet = (struct icmpheader *)(packet + sizeof(struct ethheader) + sizeof(struct ipheader));
 
-    if(icmp_packet->type==8){   // if type is request
-       
-    printf("SEND IT\n");
-    char buf[1500];
-    memset((char *)buf, 0, 1500);
-    memcpy((char *)buf, ip_packet, ntohs(ip_packet->ip_len));
+    //if (icmp_packet->type == 8) // if type is request(8)
+    //{ 
 
-    struct ipheader *ip_spoof = (struct ipheader *)buf;
-    struct icmpheader *icmp_spoof = (struct icmpheader *)(buf + sizeof(struct ipheader));
-     icmp_spoof->type=0;        // i set packet to be reply
-    
+        printf("SEND IT\n");
+        char buf[1500];
+        memset((char *)buf, 0, 1500);
+        memcpy((char *)buf, ip_packet, ntohs(ip_packet->ip_len));
 
-    ip_spoof->source_ip = ip_packet->dest_ip;
-    ip_spoof->dest_ip = ip_packet->source_ip;
-    ip_spoof->ip_checksum = 0;
-    icmp_spoof->checksum = 0;
-    ip_spoof->ip_checksum = (calculate_checksum((unsigned short*)ip_spoof, sizeof(struct ipheader)));
-    icmp_spoof->checksum = (calculate_checksum((unsigned short*)icmp_spoof, sizeof(struct icmpheader)));
+        struct ipheader *ip_spoof = (struct ipheader *)buf;
+        struct icmpheader *icmp_spoof = (struct icmpheader *)(buf + sizeof(struct ipheader));
+        icmp_spoof->type = 0; // set packet to be reply(0)
 
-    packet_spoof(ip_spoof);
-    }
+        ip_spoof->source_ip = ip_packet->dest_ip;
+        ip_spoof->dest_ip = ip_packet->source_ip;
+        ip_spoof->ip_checksum = 0;
+        icmp_spoof->checksum = 0;
+        ip_spoof->ip_checksum = (calculate_checksum((unsigned short *)ip_spoof, sizeof(struct ipheader)));
+        icmp_spoof->checksum = (calculate_checksum((unsigned short *)icmp_spoof, sizeof(struct icmpheader)));
+
+        packet_spoof(ip_spoof);
+    //}
 }
 int main(int argc, char *argv[])
 {
