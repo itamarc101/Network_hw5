@@ -39,39 +39,6 @@ struct ethheader
     u_short ether_type;
 };
 
-void packet_spoof(struct ipheader *ip_packet)
-{
-    struct sockaddr_in dest;
-    int enable = 1;
-
-    // sock creation
-    int sock = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
-    if (sock == -1)
-    {
-        printf("error creating socket\n");
-        return;
-    }
-    setsockopt(sock, IPPROTO_IP, IP_HDRINCL, &enable, sizeof(enable));
-
-    // information about dest
-    dest.sin_family = AF_INET;
-    dest.sin_addr = ip_packet->dest_ip;
-    dest.sin_port = 0;
-
-    // sends packet
-    int send = sendto(sock, ip_packet, ntohs(ip_packet->ip_len), 0, (struct sockaddr *)&dest, sizeof(dest));
-    if (send == -1)
-    {
-        printf("error sending packet\n");
-        ip_packet->ip_ver = 4;
-        ip_packet->ip_ihl = 5;
-        return;
-    }
-
-    printf("SUCCESSFULLY SENT A PACKET\n");
-    close(sock);
-}
-
 unsigned short calculate_checksum(unsigned short *paddress, int len)
 {
     int nleft = len;
@@ -99,34 +66,55 @@ unsigned short calculate_checksum(unsigned short *paddress, int len)
     return answer;
 }
 
+void packet_spoof(struct ipheader *ip_packet)
+{
+    struct sockaddr_in dest;
+    int enable = 1;
+
+    // sock creation
+    int sock = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
+    if (sock == -1)
+    {
+        printf("error creating socket\n");
+        return;
+    }
+    setsockopt(sock, IPPROTO_IP, IP_HDRINCL, &enable, sizeof(enable));
+
+    // information about dest
+    dest.sin_family = AF_INET;
+    dest.sin_addr = ip_packet->dest_ip;
+    dest.sin_port = 0;
+
+    ip_packet->ip_ver = 4;
+    ip_packet->ip_ihl = 5;
+    ip_packet->ip_ttl = 64;
+    ip_packet->ip_protocol = IPPROTO_ICMP;
+    ip_packet->ip_checksum = 0;
+    ip_packet->ip_checksum = calculate_checksum((unsigned short *)ip_packet, sizeof(struct ipheader));
+
+    struct icmpheader *icmp_packet = (struct icmpheader *)((unsigned char *)ip_packet + sizeof(struct ipheader));
+    icmp_packet->type = 0;
+    icmp_packet->checksum = 0;
+    icmp_packet->checksum = calculate_checksum((unsigned short *)icmp_packet, sizeof(struct icmpheader));
+
+    if (sendto(sock, ip_packet, ntohs(ip_packet->ip_len), 0, (struct sockaddr *)&dest, sizeof(dest)) == -1)
+        printf("error sending\n");
+    else
+        printf("SPOOFED PACKET!\n");
+    close(sock);
+}
+
 void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *packet)
 {
-    struct ethheader *ether_packet = (struct ethheader *)packet;
     struct ipheader *ip_packet;
-    ip_packet = (struct ipheader *)(packet + sizeof(struct ethheader));
-    struct icmpheader *icmp_packet = (struct icmpheader *)(packet + sizeof(struct ethheader) + sizeof(struct ipheader));
+    ip_packet = (struct ipheader*)(packet + sizeof(struct ethheader));
+    struct icmpheader *icmp_packet = (struct icmpheader*)(packet + sizeof(struct ethheader) + sizeof(struct ipheader));
 
-    //if (icmp_packet->type == 8) // if type is request(8)
-    //{ 
-
-        printf("SEND IT\n");
-        char buf[1500];
-        memset((char *)buf, 0, 1500);
-        memcpy((char *)buf, ip_packet, ntohs(ip_packet->ip_len));
-
-        struct ipheader *ip_spoof = (struct ipheader *)buf;
-        struct icmpheader *icmp_spoof = (struct icmpheader *)(buf + sizeof(struct ipheader));
-        icmp_spoof->type = 0; // set packet to be reply(0)
-
-        ip_spoof->source_ip = ip_packet->dest_ip;
-        ip_spoof->dest_ip = ip_packet->source_ip;
-        ip_spoof->ip_checksum = 0;
-        icmp_spoof->checksum = 0;
-        ip_spoof->ip_checksum = (calculate_checksum((unsigned short *)ip_spoof, sizeof(struct ipheader)));
-        icmp_spoof->checksum = (calculate_checksum((unsigned short *)icmp_spoof, sizeof(struct icmpheader)));
-
-        packet_spoof(ip_spoof);
-    //}
+    if (icmp_packet->type == 8) // if type is request(8)
+    {
+        packet_spoof(ip_packet);
+    }
+   
 }
 int main(int argc, char *argv[])
 {
@@ -134,7 +122,7 @@ int main(int argc, char *argv[])
     char errbuf[PCAP_ERRBUF_SIZE];
     pcap_t *handle;
     char *device = "enp0s3";
-    char *filter = "icmp[icmptype] = icmp-echo";
+    char *filter = "icmp";
     struct bpf_program filter_exp;
     bpf_u_int32 net;
 
