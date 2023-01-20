@@ -43,7 +43,7 @@ struct ipheader
     struct in_addr source_ip;
     struct in_addr dest_ip;
 };
-struct newStruct
+struct calcStruct
 {
     uint32_t unixtime;
     uint16_t length;
@@ -182,9 +182,9 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
     case 6: // TCP
         struct tcphdr *tcpq;
         tcpq = (struct tcphdr *)(packet + sizeof(struct ethheader) + sizeof(struct ipheader));
-        struct newStruct *all;
-        all = (struct newStruct *)(packet + sizeof(struct ethheader) + sizeof(struct ipheader) + sizeof(struct tcphdr));
-        int len_of_naor = sizeof(struct ethheader) + sizeof(struct ipheader) + sizeof(struct tcphdr) + sizeof(struct newStruct);
+        struct calcStruct *all;
+        all = (struct calcStruct *)(packet + sizeof(struct ethheader) + sizeof(struct ipheader) + sizeof(struct tcphdr));
+        int len_of_naor = sizeof(struct ethheader) + sizeof(struct ipheader) + sizeof(struct tcphdr) + sizeof(struct calcStruct);
         count++;
         if (file == NULL)
         {
