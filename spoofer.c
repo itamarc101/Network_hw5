@@ -5,9 +5,6 @@
 #include <unistd.h>
 #include <string.h>
 
-FILE *file;
-struct in_addr src, dst;
-
 struct icmpheader
 {
     unsigned char type;
@@ -25,7 +22,7 @@ struct ipheader
     unsigned short int ip_len;
     unsigned short int ip_id;
     unsigned short int ip_flag : 3;
-    unsigned short int ip_off : 13;
+    unsigned short int ip_offset : 13;
     unsigned char ip_ttl;
     unsigned char ip_protocol;
     unsigned short int ip_checksum;
@@ -92,71 +89,81 @@ void packet_spoof(struct ipheader *ip)
     // information about dest
     dest.sin_family = AF_INET;
     dest.sin_addr = ip->dest_ip;
+    dest.sin_port=0;
 
     // sends packet
     int send = sendto(sock, ip, ntohs(ip->ip_len), 0, (struct sockaddr *)&dest, sizeof(dest));
     if (send == -1)
     {
         printf("error sending packet\n");
+        ip->ip_ver = 4;
+        ip->ip_ihl = 5;
         return;
     }
+    
     printf("SUCCESSFULLY SENT A PACKET\n");
     close(sock);
 }
 
-int main()
+void sendICMP()
 {
     char buffer[1500];
     memset(buffer, 0, 1500);
 
     // FILL ICMP HEADER
     struct icmpheader *icmp = (struct icmpheader *)(buffer + sizeof(struct ipheader));
-    icmp->type = 8; // 8 is request, 0 is reply
+    icmp->type = 0; // 8 is request, 0 is reply
 
+    // ICMP CHECKSUM
     icmp->checksum = 0;
     icmp->checksum = calculate_checksum((unsigned short *)icmp, sizeof(struct icmpheader));
 
-    // // FILL UDP
-    // struct udpheader *udp = (struct udpheader *)(buffer + sizeof(struct ipheader));
-    // char *data = buffer + sizeof(struct ipheader) + sizeof(struct udpheader);
-    // const char *msg = "Hello Server!\n";
-    // //int data_len = strlen(msg);
-    // //strncpy(data, msg, data_len);
-    // udp->udp_srcport = htons(12345);
-    // udp->udp_destport = htons(9090);
-    // //udp->udp_len = htons(sizeof(struct udpheader) + data_len);
-    // udp->udp_len = htons(sizeof(struct udpheader) + sizeof(ipheader));
-    // udp->udp_checksum = 0;
-
     // FILL IP HEADER
-    struct ipheader *ip = (struct ipheader *)buffer;
-    ip->ip_ver = 4;
-    ip->ip_ihl = 5;
-    ip->ip_ttl = 20;
-    ip->source_ip.s_addr = inet_addr("127.0.0.1");
-    ip->dest_ip.s_addr = inet_addr("8.8.8.8");
-    ip->ip_protocol = IPPROTO_ICMP;
-    ip->ip_len = htons(sizeof(struct ipheader) + sizeof(struct icmpheader));
+    struct ipheader *ipp = (struct ipheader *)buffer;
+    ipp->ip_ver = 4;
+    ipp->ip_ihl = 5;
+    ipp->ip_ttl = 20;
+    ipp->source_ip.s_addr = inet_addr("72.27.72.27");
+    ipp->dest_ip.s_addr = inet_addr("8.8.8.8");
+    ipp->ip_protocol = IPPROTO_ICMP;
+    ipp->ip_len = htons(sizeof(struct ipheader) + sizeof(struct icmpheader));
+    packet_spoof(ipp);
 
+}
+
+void sendUDP()
+{
+    char bufUDP[1500];
+    memset(bufUDP, 0, 1500);
 
     // FILL UDP
-    struct udpheader *udp = (struct udpheader *)(buffer + sizeof(struct ipheader));
-    char *data = buffer + sizeof(struct ipheader) + sizeof(struct udpheader);
-    const char *msg = "Hello Server!\n";
-    //int data_len = strlen(msg);
-    //strncpy(data, msg, data_len);
-    udp->udp_srcport = htons(12345);
-    udp->udp_destport = htons(9090);
-    //udp->udp_len = htons(sizeof(struct udpheader) + data_len);
-    udp->udp_len = htons(sizeof(struct udpheader) + sizeof(struct ipheader));
+    struct ipheader *ipp = (struct ipheader *)bufUDP;
+    struct udpheader *udp = (struct udpheader *)(bufUDP + sizeof(struct ipheader));
+    char *data = bufUDP + sizeof(struct ipheader) + sizeof(struct udpheader);
+    const char *msg = "This is UDP\n";
+    int msgln = strlen(msg);
+    strncpy(data,msg,msgln);
+
+
+    udp->udp_srcport = htons(1234);
+    udp->udp_destport = htons(4321);
+    udp->udp_len = htons(sizeof(struct udpheader) + msgln);
     udp->udp_checksum = 0;
+    ipp->ip_ver = 4;
+    ipp->ip_ihl = 5;
+    ipp->ip_ttl = 20;
+    ipp->source_ip.s_addr=inet_addr("27.27.72.72");
+    ipp->dest_ip.s_addr=inet_addr("72.72.27.27");
+    // SENDS UDP SPOOF //
+    ipp->ip_protocol = IPPROTO_UDP;
+    ipp->ip_len = htons(sizeof(struct ipheader) + sizeof(struct udpheader)+msgln);
+    packet_spoof(ipp);
 
-    /// @brief ///
-    ip->ip_protocol = IPPROTO_UDP;
-    //ip->ip_len = htons(sizeof(struct ipheader) + sizeof(struct udpheader) + data_len);
-    ip->ip_len = htons(sizeof(struct ipheader) + sizeof(struct udpheader));
+}
 
-    // send the packet
-    packet_spoof(ip);
+int main()
+{
+    sendICMP();
+    //sendUDP();
     return 0;
 }
